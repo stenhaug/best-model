@@ -1,0 +1,75 @@
+
+```{r}
+library(tidyverse)
+library(rsample)
+library(mirt)
+library(here)
+
+R.utils::sourceDirectory(here("R"))
+
+path <- "~/Google_Drive/6_Dissertation/sim.cv.irt/"
+source(paste0(path, "R/elpl_helpers.R"))
+source(paste0(path, "R/elpl_out.R"))
+```
+
+```{r}
+simmed <- 
+	sim(
+		n_items = 10, 
+		disc_ln_sd = 0.5, 
+		n_ref = 100, 
+		n_foc = 100, 
+		mean_foc = 1
+	)
+
+models <- 
+	tibble(type = c("Rasch", "2PL", "3PL")) %>% 
+	mutate(
+		# model
+		
+		model = type %>% map(~ mirt(simmed$data, 1, .)),
+		
+		fscore = model %>% map(fscores),
+		
+		p = map2(model, fscore, get_p),
+		
+		# practical outcomes
+		
+		theta_rmse = 
+			fscore %>% 
+			map_dbl(~ rmse(., simmed$students$theta)),
+		
+		theta_rankcorr =
+			fscore %>% 
+			map_dbl(~ cor(., simmed$students$theta, method = "spearman")),
+		
+		accuracy = p %>% map_dbl(~ mean((. > 0.5) == simmed$data)),
+		
+		bott20 = fscore %>% map_dbl(fscore_to_perc_of_bott20_identified),
+		
+		# theoretical outcome
+		
+		elpl_marg = 
+			model %>% 
+			map_dbl(
+				~ elpl_y_outin(
+					data = simmed$data,
+					pars = simmed$items,
+					model = .,
+					theta_mu = 0,
+					theta_var = 1
+				)
+			),
+		
+		# practical model comparison
+		
+		log_lik = model %>% map_dbl(~ .@Fit$logLik),
+        anova_p = map2_dbl(model, lag(model), get_p_from_anova),
+        aic = model %>% map_dbl(~ .@Fit$AIC),
+        aic_c = model %>% map_dbl(~ .@Fit$AICc),
+        bic = model %>% map_dbl(~ .@Fit$BIC),
+        dic = model %>% map_dbl(~ .@Fit$DIC)
+	)
+
+fscore <- models$fscore[[2]]
+```

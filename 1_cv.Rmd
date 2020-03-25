@@ -1,0 +1,29 @@
+
+```{r}
+cross_val <- 
+	vfold_cv(simmed$data, v = 5, repeats = 2) %>% 
+	# select(-id) %>% 
+	mutate(
+		in_model_1pl = 
+			splits %>% map(~ mirt(training(.), 1, "Rasch")),
+		in_model_2pl = 
+			splits %>% map(~ mirt(training(.), 1, "2PL")),
+		in_model_3pl = 
+			splits %>% map(~ mirt(training(.), 1, "3PL")),
+		
+		marg_cv_1pl = 
+			map2_dbl(in_model_1pl, splits, ~ sumlog(marg_cv(.x, testing(.y)))),
+		marg_cv_2pl = 
+			map2_dbl(in_model_2pl, splits, ~ sumlog(marg_cv(.x, testing(.y)))),
+		marg_cv_3pl = 
+			map2_dbl(in_model_3pl, splits, ~ sumlog(marg_cv(.x, testing(.y))))
+	) %>% 
+	select(splits, starts_with("marg_cv"), starts_with("in_model"))
+
+cross_val %>% 
+	select(starts_with("marg_cv")) %>% 
+	gather(var, val) %>% 
+	group_by(var) %>% 
+	summarize(sum(val) / (nrow(simmed$students) * 2)) # 2 COMES FROM REPEATS
+```
+
